@@ -1,0 +1,20 @@
+flowchart LR
+  PSU[Regulated 5V supply] --> MCU[NodeMCU ESP8266]
+  MCU -->|D1 GPIO5 wire| IN1[Relay IN1 Main Light]
+  MCU -->|D2 GPIO4 wire| IN2[Relay IN2 LED Light]
+  MCU -->|D5 GPIO14 wire| IN3[Relay IN3 Fan]
+  MCU -->|D6 GPIO12 wire| IN4[Relay IN4 Socket]
+  MCU -->|D3 GPIO0 wire| S1[Momentary S1]
+  MCU -->|D4 GPIO2 wire| S2[Momentary S2]
+  MCU -->|D7 GPIO13 wire| S3[Momentary S3]
+  MCU -->|D8 GPIO15 wire| S4[Momentary S4]
+  S1 --> GND[Common GND]
+  S2 --> GND
+  S3 --> GND
+  S4 --> GND
+  MCU -->|GND wire| GND
+  RELAY[Relay module VCC/GND] --> GND
+  IN1 --> L1[COM/NO Main Light load]
+  IN2 --> L2[COM/NO LED Light load]
+  IN3 --> L3[COM/NO Fan load]
+  IN4 --> L4[COM/NO Socket load]
