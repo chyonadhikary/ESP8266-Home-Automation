@@ -114,3 +114,46 @@ Board: **NodeMCU 1.0 (ESP-12E Module)**।
 - Google Home: https://docs.arduino.cc/arduino-cloud/guides/google-home/
 - Cloud Variables: https://docs.arduino.cc/arduino-cloud/cloud-interface/variables/
 - IoT Remote: https://docs.arduino.cc/arduino-cloud/iot-remote-app/getting-started
+
+
+## ১০. Local Web Firmware Update (OTA)
+
+এই version-এ local browser থেকে firmware update করা যায়। Arduino IDE কেবল প্রথমবার firmware install এবং নতুন `.bin` file তৈরি করার জন্য লাগবে। পরবর্তী update-এর সময় USB দিয়ে board-এ upload করার প্রয়োজন নেই।
+
+### প্রথমবার প্রস্তুতি
+
+1. `config.h` খুলে `OTA_PASSWORD`-এর default password পরিবর্তন করুন।
+2. Arduino IDE-তে Board হিসেবে **NodeMCU 1.0 (ESP-12E Module)** নির্বাচন করুন।
+3. প্রথমবার USB দিয়ে sketch upload করুন।
+4. Arduino IDE-এর **Sketch → Export Compiled Binary** নির্বাচন করুন।
+5. তৈরি হওয়া `.bin` file নিরাপদে রাখুন।
+
+### Browser থেকে update
+
+1. ESP8266 এবং ফোন/কম্পিউটারকে একই Wi-Fi network-এ রাখুন।
+2. Dashboard খুলুন, যেমন `http://192.168.1.50/`।
+3. **Firmware Update** button চাপুন, অথবা সরাসরি `http://192.168.1.50/update` খুলুন।
+4. Username হিসেবে `admin` এবং `config.h`-এ সেট করা OTA password দিন।
+5. NodeMCU 1.0-এর জন্য তৈরি `.bin` file নির্বাচন করে upload করুন।
+6. Upload শেষ হলে board নিজে restart হবে। Wi-Fi ও Arduino Cloud credentials LittleFS-এ আগের মতো থাকবে।
+
+### OTA-এর গুরুত্বপূর্ণ নিয়ম
+
+- `OTA_PASSWORD` অবশ্যই প্রথম upload-এর আগে পরিবর্তন করুন।
+- শুধু এই board এবং একই project-এর জন্য তৈরি `.bin` upload করুন।
+- OTA update-এর সময় relay সাময়িকভাবে restart হয়ে safety state-এ OFF হবে।
+- Update চলাকালে power বা Wi-Fi বন্ধ করবেন না।
+- Router-এ port forwarding করে update page internet-এ প্রকাশ করবেন না।
+- OTA update page local network-এর জন্য; এটি cloud থেকে firmware update নয়।
+- `Erase Flash: All Flash Contents` ব্যবহার করলে saved Wi-Fi/Cloud configuration মুছে যেতে পারে।
+- নতুন firmware release হলে `FIRMWARE_VERSION` বাড়িয়ে দিন, যেমন `2.2.0-ota` থেকে `2.3.0`।
+
+### বর্তমান OTA credentials
+
+| Setting | Value |
+|---|---|
+| Update URL | `http://<ESP8266-IP>/update` |
+| Username | `admin` |
+| Password | `config.h`-এ নির্ধারিত `OTA_PASSWORD` |
+
+এই local OTA ব্যবস্থা password-protected হলেও HTTP encryption ব্যবহার করে না। তাই এটি কেবল trusted local Wi-Fi-তে ব্যবহার করুন এবং update password অন্যের সঙ্গে শেয়ার করবেন না।

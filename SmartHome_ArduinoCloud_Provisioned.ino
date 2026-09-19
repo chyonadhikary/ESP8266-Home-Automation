@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
+#include <ESP8266HTTPUpdateServer.h>
 #include <DNSServer.h>
 #include <ArduinoIoTCloud.h>
 #include <Arduino_ConnectionHandler.h>
@@ -8,15 +9,18 @@
 #include "storage.h"
 
 ESP8266WebServer web(80);
+ESP8266HTTPUpdateServer httpUpdater;
 DNSServer dns;
 CloudConfig cfg;
 WiFiConnectionHandler *cloudConnection = nullptr;
 
 bool setupMode = false;
+bool offlineMode = false;
 bool cloudStarted = false;
 bool rebootPending = false;
 unsigned long cloudStartedAt = 0;
 unsigned long rebootAt = 0;
+unsigned long offlineReconnectAt = 0;
 
 bool mainLight = false;
 bool ledLight = false;
@@ -101,6 +105,9 @@ String dashboard() {
   h += WiFi.localIP().toString();
   h += F("</b><br>Arduino Cloud: ");
   h += cloudText;
+  h += F("<br>Mode: <b>");
+  h += offlineMode ? F("Offline AP (local control)") : F("Online / Cloud");
+  h += F("</b>");
   h += F("<br>Firmware: ");
   h += FIRMWARE_VERSION;
   h += F("</div>");
@@ -123,6 +130,7 @@ String dashboard() {
   h += F("</div><div class='card'><h2>Arduino Cloud / Google Home</h2>");
   h += F("<p class='muted'>Use Arduino Cloud Dashboard or IoT Remote. Google Home variables must be Smart Home Switch types.</p>");
   h += F("<a href='/settings'><button>Settings</button></a>");
+  h += F("<a href='/update'><button>Firmware Update</button></a>");
   h += F("<a href='/setup'><button class='off'>Reconfigure</button></a></div>");
   h += pageEnd();
   return h;
@@ -173,6 +181,7 @@ void readButtons() {
 
 void startSetupAP() {
   setupMode = true;
+  offlineMode = false;
   cloudStarted = false;
   WiFi.disconnect();
   WiFi.mode(WIFI_AP);
@@ -180,8 +189,21 @@ void startSetupAP() {
   dns.start(53, "*", WiFi.softAPIP());
 }
 
+void startOfflineAP() {
+  setupMode = false;
+  offlineMode = true;
+  cloudStarted = false;
+  WiFi.disconnect();
+  WiFi.mode(WIFI_AP_STA);
+  WiFi.softAP(apName().c_str(), SETUP_AP_PASSWORD);
+  dns.start(53, "*", WiFi.softAPIP());
+  if (cfg.provisioned && cfg.ssid.length()) WiFi.begin(cfg.ssid.c_str(), cfg.wifiPassword.c_str());
+  offlineReconnectAt = millis() + OFFLINE_RECONNECT_MS;
+}
+
 void startCloud() {
   setupMode = false;
+  offlineMode = false;
   cloudStartedAt = millis();
   cloudConnection = new WiFiConnectionHandler(cfg.ssid.c_str(), cfg.wifiPassword.c_str());
   ArduinoCloud.setThingId(cfg.thingId);
@@ -260,6 +282,9 @@ void setupRoutes() {
     rebootPending = true;
     rebootAt = millis() + 1500;
   });
+  // Local, password-protected firmware update page.
+  // Upload only a .bin built for NodeMCU 1.0 (ESP-12E Module).
+  httpUpdater.setup(&web, OTA_UPDATE_PATH, OTA_USERNAME, OTA_PASSWORD);
   web.begin();
 }
 
@@ -272,15 +297,20 @@ void setup() {
   mainLight = false; ledLight = false; fan = false; socket = false;
   applyRelays();
   setupRoutes();
-  if (cfg.provisioned) startCloud(); else startSetupAP();
+  if (cfg.provisioned) startCloud(); else startOfflineAP();
 }
 
 void loop() {
-  if (setupMode) dns.processNextRequest();
+  if (setupMode || offlineMode) dns.processNextRequest();
   web.handleClient();
-  if (!setupMode && cloudStarted) {
+  if (!offlineMode && !setupMode && cloudStarted) {
     ArduinoCloud.update();
-    if (WiFi.status() != WL_CONNECTED && millis() - cloudStartedAt > WIFI_TIMEOUT_MS) startSetupAP();
+    if (WiFi.status() != WL_CONNECTED && millis() - cloudStartedAt > WIFI_TIMEOUT_MS) startOfflineAP();
+  }
+  if (offlineMode && cfg.provisioned && WiFi.status() == WL_CONNECTED) ESP.restart();
+  if (offlineMode && cfg.provisioned && millis() > offlineReconnectAt && WiFi.status() != WL_CONNECTED) {
+    WiFi.begin(cfg.ssid.c_str(), cfg.wifiPassword.c_str());
+    offlineReconnectAt = millis() + OFFLINE_RECONNECT_MS;
   }
   readButtons();
   if (rebootPending && millis() > rebootAt) ESP.restart();
